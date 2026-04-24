@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>逆SEO 順位ダッシュボード</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f5f5f3; --bg3: #eeede8;
+    --text: #1a1a18; --text2: #6b6b68; --text3: #9e9d99;
+    --border: rgba(0,0,0,0.12); --border2: rgba(0,0,0,0.22);
+    --green: #1D9E75; --green-bg: #E1F5EE;
+    --red: #A32D2D; --red-bg: #FCEBEB;
+    --amber: #854F0B; --amber-bg: #FAEEDA;
+    --teal: #3B6D11; --teal-bg: #EAF3DE;
+    --radius: 8px; --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #252523; --bg3: #2e2e2b;
+      --text: #f0ede6; --text2: #a09d97; --text3: #6b6965;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
+      --green-bg: #0a3326; --red-bg: #3a1212; --amber-bg: #3a2106; --teal-bg: #142608;
+    }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic UI', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; }
+  input, textarea, select, button { font-family: inherit; font-size: 13px; }
+  input, textarea, select {
+    padding: 0 10px; height: 34px; border: 0.5px solid var(--border2);
+    border-radius: var(--radius); background: var(--bg); color: var(--text); outline: none; width: 100%;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--green); }
+  textarea { height: auto; padding: 8px 10px; line-height: 1.6; }
+  select { cursor: pointer; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+  #app { display: flex; height: 100vh; overflow: hidden; }
+  /* Sidebar */
+  .sidebar {
+    width: 180px; flex-shrink: 0; background: var(--bg2);
+    border-right: 0.5px solid var(--border); padding: 16px 12px;
+    display: flex; flex-direction: column; gap: 3px; overflow-y: auto;
+  }
+  .sidebar-label { font-size: 10px; font-weight: 600; color: var(--text3); letter-spacing: 0.08em; margin-bottom: 6px; }
+  .client-btn {
+    text-align: left; padding: 6px 10px; border-radius: var(--radius);
+    border: 0.5px solid transparent; background: none;
+    font-size: 12px; color: var(--text); cursor: pointer; word-break: break-all; line-height: 1.4;
+  }
+  .client-btn.active { background: var(--bg3); border-color: var(--border2); font-weight: 500; }
+  .client-btn:hover:not(.active) { background: var(--bg3); }
+  .add-row { display: flex; gap: 4px; margin-top: 8px; }
+  .add-row input { flex: 1; height: 28px; font-size: 11px; padding: 0 6px; }
+  .add-row button { height: 28px; width: 28px; background: none; border: 0.5px solid var(--border2); border-radius: var(--radius); font-size: 16px; color: var(--text); cursor: pointer; flex-shrink: 0; }
+  .sidebar-divider { border-top: 0.5px solid var(--border); margin: 10px 0; }
+  .sidebar-action { text-align: left; padding: 5px 10px; border-radius: var(--radius); border: none; background: none; font-size: 12px; color: var(--text2); cursor: pointer; width: 100%; }
+  .sidebar-action:hover { background: var(--bg3); }
+  .sidebar-action.danger { color: var(--red); }
+  /* Main */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 0.5px solid var(--border); flex-wrap: wrap; background: var(--bg); }
+  .toolbar-title { font-size: 14px; font-weight: 600; margin-right: 4px; }
+  .btn { font-size: 11px; background: none; border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 4px 12px; color: var(--text); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--bg2); }
+  .btn.primary { border-color: var(--green); color: var(--green); }
+  .btn.primary:hover { background: var(--green-bg); }
+  .btn.primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .status-msg { font-size: 11px; color: var(--text2); }
+  .status-msg.err { color: var(--red); }
+  .progress-wrap { flex: 1; max-width: 120px; background: var(--bg3); border-radius: 4px; height: 4px; overflow: hidden; }
+  .progress-bar { height: 4px; background: var(--green); transition: width 0.3s; }
+  /* Content area */
+  .content { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+  /* Table */
+  .table-wrap { overflow-x: auto; border: 0.5px solid var(--border); border-radius: var(--radius-lg); }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th { background: var(--bg2); border-bottom: 0.5px solid var(--border); padding: 6px 10px; font-weight: 500; color: var(--text2); white-space: nowrap; text-align: left; }
+  td { border-bottom: 0.5px solid var(--border); padding: 6px 10px; }
+  tr:last-child td { border-bottom: none; }
+  tr.selected td { background: var(--bg2); }
+  tr:hover td { background: var(--bg2); cursor: pointer; }
+  /* Rank badge */
+  .rank { font-weight: 500; padding: 1px 7px; border-radius: 5px; font-size: 12px; }
+  .rank-1 { background: var(--red-bg); color: var(--red); }
+  .rank-3 { background: var(--amber-bg); color: var(--amber); }
+  .rank-5 { background: var(--teal-bg); color: var(--teal); }
+  .rank-o { color: var(--text); }
+  /* Bottom panels */
+  .bottom { display: flex; gap: 12px; min-height: 260px; }
+  .panel { flex: 1; min-width: 0; border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 12px; display: flex; flex-direction: column; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .panel-title { font-size: 11px; font-weight: 500; color: var(--text2); }
+  .period-tabs { display: flex; border: 0.5px solid var(--border2); border-radius: var(--radius); overflow: hidden; }
+  .period-tab { padding: 3px 10px; font-size: 11px; border: none; background: none; cursor: pointer; color: var(--text2); }
+  .period-tab.active { background: var(--bg3); font-weight: 500; color: var(--text); }
+  .chart-area { flex: 1; position: relative; min-height: 180px; }
+  .history-scroll { flex: 1; overflow: auto; }
+  /* Empty state */
+  .empty { display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 12px; height: 100%; }
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 200; }
+  .modal { background: var(--bg); border-radius: var(--radius-lg); padding: 24px; width: 500px; max-height: 85vh; overflow-y: auto; border: 0.5px solid var(--border2); }
+  .modal-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+  .field { margin-bottom: 10px; }
+  .field label { font-size: 11px; color: var(--text2); display: block; margin-bottom: 4px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .notice { background: var(--amber-bg); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font-size: 12px; color: var(--amber); margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const {useState, useEffect, useRef, useCallback} = React;
+const e = React.createElement;
+const SK = "nseo_v2";
+const COLORS = ["#1D9E75","#378ADD","#D85A30","#D4537E","#BA7517","#533AB7","#639922","#E24B4A","#5F5E5A","#0F6E56","#185FA5","#993C1D","#854F0B","#3B6D11","#A32D2D","#3C3489","#27500A","#791F1F","#633806","#412402"];
+const col = i => COLORS[i % COLORS.length];
+
+// ── Storage (localStorage for standalone app) ──
+function dbLoad() {
+  try { const d = localStorage.getItem(SK); return d ? JSON.parse(d) : {clients:{}}; } catch { return {clients:{}}; }
+}
+function dbSave(d) {
+  try { localStorage.setItem(SK, JSON.stringify(d)); } catch(e) { console.error(e); }
+}
+
+// ── Google Custom Search ──
+async function fetchRanksForKw(kw, domains, apiKey, cx, num, gl) {
+  const pages = Math.ceil(Math.min(num, 50) / 10); let all = [];
+  for (let p = 0; p < pages; p++) {
+    const start = p * 10 + 1;
+    const params = new URLSearchParams({key:apiKey, cx, q:kw, num:10, start, hl:"ja"});
+    if (gl) params.append("gl", gl);
+    const res = await fetch("https://www.googleapis.com/customsearch/v1?" + params);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    if (data.items) all = [...all, ...data.items.map((it,i) => ({...it, rank:start+i}))];
+    if (!data.items || data.items.length < 10) break;
+    await new Promise(r => setTimeout(r, 350));
+  }
+  const result = {};
+  domains.forEach(d => {
+    const found = all.find(it => { try { return new URL(it.link).hostname.replace(/^www\./,"") === d.replace(/^www\./,""); } catch { return false; } });
+    result[d] = found ? {rank:found.rank, title:found.title, url:found.link} : null;
+  });
+  return result;
+}
+
+// ── Rank Badge ──
+function RankBadge({rank}) {
+  if (rank === null || rank === undefined) return e("span", {style:{color:"var(--text3)"}}, "-");
+  const cls = rank===1?"rank-1":rank<=3?"rank-3":rank<=5?"rank-5":"rank-o";
+  return e("span", {className:"rank "+cls}, rank+"位");
+}
+
+// ── Diff badge ──
+function DiffBadge({diff}) {
+  if (diff === null || diff === undefined) return e("span", {style:{color:"var(--text3)"}}, "-");
+  if (diff > 0) return e("span", {style:{color:"var(--teal)",fontWeight:500}}, "▲"+diff);
+  if (diff < 0) return e("span", {style:{color:"var(--red)",fontWeight:500}}, "▼"+Math.abs(diff));
+  return e("span", {style:{color:"var(--text3)"}}, "–");
+}
+
+// ── Line Chart ──
+function LineChart({history, domains, kw, selDomains, period, chartRef}) {
+  const canvasRef = useRef();
+  const inst = useRef(null);
+
+  useEffect(() => { if (chartRef) chartRef.current = canvasRef.current; }, []);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const isDark = window.matchMedia("(prefers-color-scheme:dark)").matches;
+    const gridCol = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
+    const tickCol = isDark ? "#6b6965" : "#9e9d99";
+    const active = selDomains.length ? selDomains : domains.slice(0, 8);
+    const labels = history.map(h => h.date.slice(5));
+    const datasets = active.map((d, i) => ({
+      label: d,
+      data: history.map(h => h.results?.[kw]?.[d]?.rank ?? null),
+      borderColor: col(i), backgroundColor: col(i)+"22",
+      tension: 0.3, pointRadius: 3, borderWidth: 2, spanGaps: false
+    }));
+    if (inst.current) inst.current.destroy();
+    inst.current = new Chart(canvasRef.current, {
+      type: "line",
+      data: {labels, datasets},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { reverse: true, min: 1, ticks: {stepSize:1, font:{size:10}, color:tickCol}, grid: {color:gridCol} },
+          x: { ticks: {font:{size:10}, maxTicksLimit:10, color:tickCol}, grid: {display:false} }
+        },
+        plugins: {
+          legend: {display:true, position:"bottom", labels:{font:{size:10}, boxWidth:12, padding:8, color:isDark?"#a09d97":"#6b6b68"}},
+          tooltip: {callbacks:{label: ctx => `${ctx.dataset.label}: ${ctx.raw}位`}}
+        }
+      }
+    });
+    return () => { if (inst.current) inst.current.destroy(); };
+  }, [history, domains, kw, selDomains, period]);
+
+  return e("canvas", {ref:canvasRef, style:{width:"100%",height:"100%"}});
+}
+
+// ── Settings Modal ──
+function SettingsModal({client, onSave, onClose}) {
+  const [s, setS] = useState({...client});
+  function save() {
+    const kws = s.keywords.map(k=>k.trim()).filter(Boolean);
+    const doms = s.domains.map(d=>d.trim().replace(/^https?:\/\//i,"").replace(/\/.*$/,"").toLowerCase()).filter(Boolean);
+    onSave({...s, keywords:kws, domains:doms});
+  }
+  const field = (label, key, type="text") => e("div", {className:"field", key},
+    e("label", null, label),
+    e("input", {type, value:s[key]||"", onChange:ev=>setS({...s,[key]:ev.target.value})})
+  );
+  return e("div", {className:"modal-overlay"},
+    e("div", {className:"modal"},
+      e("p", {className:"modal-title"}, "クライアント設定"),
+      e("div", {className:"notice"}, "⚠ APIキーはこのブラウザのlocalStorageに保存されます。共用PCでの使用は避けてください。"),
+      field("クライアント名", "name"),
+      field("Google API key", "apiKey", "password"),
+      field("検索エンジンID (cx)", "cx"),
+      e("div", {className:"grid2"},
+        e("div", {className:"field"},
+          e("label", null, "取得順位数"),
+          e("select", {value:s.numResults||20, onChange:ev=>setS({...s,numResults:Number(ev.target.value)})},
+            [10,20,30,50].map(n=>e("option",{key:n,value:n},n+"位まで")))
+        ),
+        e("div", {className:"field"},
+          e("label", null, "検索地域"),
+          e("select", {value:s.gl||"jp", onChange:ev=>setS({...s,gl:ev.target.value})},
+            e("option",{value:"jp"},"日本（jp）"),
+            e("option",{value:""},"指定なし"),
+            e("option",{value:"us"},"US")
+          )
+        )
+      ),
+      e("div", {className:"field"},
+        e("label", null, "監視キーワード（1行1件）"),
+        e("textarea", {rows:4, value:(s.keywords||[]).join("\n"), onChange:ev=>setS({...s,keywords:ev.target.value.split("\n")}), style:{fontFamily:"monospace",fontSize:12}})
+      ),
+      e("div", {className:"field"},
+        e("label", null, "監視ドメイン（1行1件・http不要・30サイト以上OK）"),
+        e("textarea", {rows:10, value:(s.domains||[]).join("\n"), onChange:ev=>setS({...s,domains:ev.target.value.split("\n")}), style:{fontFamily:"monospace",fontSize:12}})
+      ),
+      e("div", {style:{display:"flex",gap:8,marginTop:8}},
+        e("button", {onClick:save, className:"btn primary"}, "保存"),
+        e("button", {onClick:onClose, className:"btn"}, "キャンセル")
+      )
+    )
+  );
+}
+
+// ── App ──
+function App() {
+  const [db, setDb] = useState(() => dbLoad());
+  const [curId, setCurId] = useState(() => { const k=Object.keys(dbLoad().clients); return k[0]||null; });
+  const [selDomains, setSelDomains] = useState([]);
+  const [selKw, setSelKw] = useState(0);
+  const [period, setPeriod] = useState(1);
+  const [showSettings, setShowSettings] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [measuring, setMeasuring] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [statusMsg, setStatusMsg] = useState("");
+  const [statusErr, setStatusErr] = useState(false);
+  const chartRef = useRef(null);
+
+  const persist = useCallback(nd => { setDb(nd); dbSave(nd); }, []);
+  const client = db.clients[curId] || null;
+
+  function addClient() {
+    if (!newName.trim()) return;
+    const id = "c" + Date.now();
+    const nc = {name:newName.trim(), apiKey:"", cx:"", gl:"jp", numResults:20, keywords:[], domains:[], history:[]};
+    const nd = {...db, clients:{...db.clients, [id]:nc}};
+    persist(nd); setCurId(id); setNewName(""); setShowSettings(true); setSelDomains([]); setSelKw(0);
+  }
+
+  function saveSettings(updated) {
+    const nd = {...db, clients:{...db.clients, [curId]:updated}};
+    persist(nd); setShowSettings(false);
+  }
+
+  function deleteClient() {
+    if (!window.confirm(`「${client.name}」を削除しますか？`)) return;
+    const {[curId]:_, ...rest} = db.clients;
+    persist({...db, clients:rest});
+    const k = Object.keys(rest); setCurId(k[0]||null); setSelDomains([]);
+  }
+
+  async function runMeasure() {
+    if (!client) return;
+    const {apiKey, cx, gl, numResults, keywords, domains} = client;
+    if (!apiKey||!cx) { setStatusMsg("❌ 設定にAPIキーとcxを入力してください"); setStatusErr(true); return; }
+    if (!keywords.length||!domains.length) { setStatusMsg("❌ KWとドメインを設定してください"); setStatusErr(true); return; }
+    setMeasuring(true); setProgress(0); setStatusErr(false); setStatusMsg("計測開始...");
+    const dateStr = new Date().toISOString().slice(0,10);
+    const results = {};
+    try {
+      for (let i = 0; i < keywords.length; i++) {
+        const kw = keywords[i];
+        setStatusMsg(`計測中: "${kw}" (${i+1}/${keywords.length})`);
+        results[kw] = await fetchRanksForKw(kw, domains, apiKey, cx, numResults||20, gl||"jp");
+        setProgress(Math.round((i+1)/keywords.length*100));
+        if (i < keywords.length-1) await new Promise(r=>setTimeout(r,500));
+      }
+      const history = [...client.history.filter(h=>h.date!==dateStr), {date:dateStr,results}].sort((a,b)=>a.date.localeCompare(b.date));
+      const nd = {...db, clients:{...db.clients, [curId]:{...client,history}}};
+      persist(nd); setStatusMsg(`✅ ${dateStr} 計測完了`); setStatusErr(false);
+    } catch(err) { setStatusMsg("❌ "+err.message); setStatusErr(true); }
+    setMeasuring(false);
+  }
+
+  function exportPNG() {
+    const canvas = chartRef.current;
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.download = `${client?.name||"graph"}_${new Date().toISOString().slice(0,10)}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  }
+
+  const clientIds = Object.keys(db.clients);
+  const history = client?.history || [];
+  const keywords = client?.keywords || [];
+  const domains = client?.domains || [];
+  const kw = keywords[selKw] || keywords[0] || "";
+  const latest = history[history.length-1];
+  const prev = history[history.length-2];
+
+  const days = period===1?30:period===3?90:period===6?180:365;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-days);
+  const filteredHist = history.filter(h=>new Date(h.date)>=cutoff);
+
+  const toggleDomain = d => setSelDomains(selDomains.includes(d) ? selDomains.filter(x=>x!==d) : [...selDomains,d]);
+
+  return e("div", {id:"app-inner"},
+    e("h1", {className:"sr-only"}, "逆SEO 順位ダッシュボード"),
+    showSettings && client && e(SettingsModal, {client, onSave:saveSettings, onClose:()=>setShowSettings(false)}),
+
+    // Sidebar
+    e("div", {className:"sidebar"},
+      e("p", {className:"sidebar-label"}, "クライアント"),
+      clientIds.map(id => e("button", {key:id, className:"client-btn"+(curId===id?" active":""), onClick:()=>{setCurId(id);setSelDomains([]);setSelKw(0);}}, db.clients[id].name)),
+      e("div", {className:"add-row"},
+        e("input", {value:newName, onChange:ev=>setNewName(ev.target.value), placeholder:"追加...", onKeyDown:ev=>ev.key==="Enter"&&addClient()}),
+        e("button", {onClick:addClient}, "+")
+      ),
+      client && e("div", null,
+        e("div", {className:"sidebar-divider"}),
+        e("button", {className:"sidebar-action", onClick:()=>setShowSettings(true)}, "設定"),
+        e("button", {className:"sidebar-action danger", onClick:deleteClient}, "削除")
+      )
+    ),
+
+    // Main
+    e("div", {className:"main"},
+      // Toolbar
+      e("div", {className:"toolbar"},
+        e("p", {className:"toolbar-title"}, client?.name || "クライアントを選択"),
+        client && e("button", {className:"btn primary", onClick:runMeasure, disabled:measuring}, measuring?"計測中...":"今すぐ計測"),
+        measuring && e("div", {className:"progress-wrap"}, e("div", {className:"progress-bar", style:{width:progress+"%"}})),
+        statusMsg && e("span", {className:"status-msg"+(statusErr?" err":"")}, statusMsg),
+        client && history.length>0 && e("button", {className:"btn", style:{marginLeft:"auto"}, onClick:exportPNG}, "グラフをPNG保存")
+      ),
+
+      // Content
+      e("div", {className:"content"},
+        !client ? e("div", {className:"empty"}, "左のパネルからクライアントを追加してください") :
+        !client.apiKey ? e("div", {className:"notice"}, "⚙ 「設定」からAPIキー・KW・ドメインを入力し、「今すぐ計測」を実行してください") :
+        e("div", {style:{display:"flex",flexDirection:"column",gap:12,flex:1}},
+
+          // KW selector + domain table
+          e("div", null,
+            e("div", {style:{display:"flex",gap:8,alignItems:"center",marginBottom:8}},
+              e("span", {style:{fontSize:11,color:"var(--text2)"}}, "キーワード:"),
+              e("select", {value:selKw, onChange:ev=>setSelKw(Number(ev.target.value)), style:{width:"auto",height:28,fontSize:12}},
+                keywords.map((k,i)=>e("option",{key:i,value:i},k)))
+            ),
+            e("div", {className:"table-wrap"},
+              e("table", null,
+                e("thead", null, e("tr", null,
+                  e("th", {style:{width:32}}, ""),
+                  e("th", null, "ドメイン"),
+                  e("th", {style:{textAlign:"center"}}, "最新順位"),
+                  e("th", {style:{textAlign:"center"}}, "前日比"),
+                  e("th", {style:{textAlign:"center"}}, "最高位"),
+                  e("th", {style:{textAlign:"center"}}, "最低位")
+                )),
+                e("tbody", null, domains.map((d,i)=>{
+                  const r = latest?.results?.[kw]?.[d];
+                  const p = prev?.results?.[kw]?.[d];
+                  const rank = r?.rank??null;
+                  const prevRank = p?.rank??null;
+                  const diff = rank!==null&&prevRank!==null ? prevRank-rank : null;
+                  const allRanks = history.map(h=>h.results?.[kw]?.[d]?.rank).filter(v=>v!=null);
+                  const best = allRanks.length ? Math.min(...allRanks) : null;
+                  const worst = allRanks.length ? Math.max(...allRanks) : null;
+                  const checked = selDomains.includes(d);
+                  return e("tr", {key:d, className:checked?"selected":"", onClick:()=>toggleDomain(d)},
+                    e("td", {style:{textAlign:"center"}}, e("input",{type:"checkbox",checked,onChange:()=>{},style:{width:13,height:13,cursor:"pointer"}})),
+                    e("td", {style:{fontFamily:"monospace",fontSize:11,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}, d),
+                    e("td", {style:{textAlign:"center"}}, e(RankBadge,{rank})),
+                    e("td", {style:{textAlign:"center"}}, e(DiffBadge,{diff})),
+                    e("td", {style:{textAlign:"center"}}, best?e("span",{style:{fontWeight:500}},best+"位"):"-"),
+                    e("td", {style:{textAlign:"center",color:"var(--text3)"}}, worst?worst+"位":"-")
+                  );
+                }))
+              )
+            )
+          ),
+
+          // Bottom panels
+          history.length > 0 && e("div", {className:"bottom"},
+            // Graph
+            e("div", {className:"panel", style:{flex:2}},
+              e("div", {className:"panel-head"},
+                e("span", {className:"panel-title"}, "順位推移グラフ"),
+                e("div", {className:"period-tabs"},
+                  [[1,"1ヶ月"],[3,"3ヶ月"],[6,"6ヶ月"],[12,"12ヶ月"]].map(([v,lb])=>
+                    e("button",{key:v,className:"period-tab"+(period===v?" active":""),onClick:()=>setPeriod(v)},lb))
+                )
+              ),
+              e("div", {className:"chart-area"},
+                filteredHist.length > 1 ?
+                  e(LineChart, {history:filteredHist, domains, kw, selDomains, period, chartRef}) :
+                  e("div", {className:"empty"}, "データが2件以上になるとグラフが表示されます")
+              )
+            ),
+            // History table
+            e("div", {className:"panel", style:{flex:1}},
+              e("div", {className:"panel-head"}, e("span",{className:"panel-title"},"順位履歴")),
+              e("div", {className:"history-scroll"},
+                e("table", {style:{fontSize:11}},
+                  e("thead", null, e("tr", null,
+                    e("th", null, "日付"),
+                    (selDomains.length?selDomains:domains).slice(0,4).map(d=>e("th",{key:d,title:d,style:{textAlign:"center",maxWidth:70,overflow:"hidden",textOverflow:"ellipsis"}},d.length>10?d.slice(0,9)+"…":d))
+                  )),
+                  e("tbody", null, [...history].reverse().map(h=>
+                    e("tr",{key:h.date},
+                      e("td",{style:{whiteSpace:"nowrap",fontSize:11}},h.date.slice(5)),
+                      (selDomains.length?selDomains:domains).slice(0,4).map(d=>{
+                        const r = h.results?.[kw]?.[d]?.rank??null;
+                        return e("td",{key:d,style:{textAlign:"center"}},r?e("span",{style:{fontWeight:r<=5?500:400,color:r===1?"var(--red)":r<=3?"var(--amber)":r<=5?"var(--teal)":"var(--text)"}},r+"位"):"-");
+                      })
+                    )
+                  ))
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("app"));
+root.render(e(App));
+</script>
+</body>
+</html>
