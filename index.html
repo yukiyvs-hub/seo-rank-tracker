@@ -128,6 +128,27 @@ function dbSave(d) {
 }
 
 // ── Google Custom Search ──
+function normalizeUrl(url) {
+  try {
+    const u = new URL(url.startsWith("http") ? url : "https://" + url);
+    return (u.hostname.replace(/^www\./, "") + u.pathname).replace(/\/$/, "").toLowerCase();
+  } catch { return url.toLowerCase(); }
+}
+
+function urlMatches(resultUrl, targetUrl) {
+  // ドメインのみ指定（スラッシュなし）→ ドメイン一致で判定
+  const isDomainOnly = !targetUrl.includes("/");
+  if (isDomainOnly) {
+    try {
+      const rHost = new URL(resultUrl).hostname.replace(/^www\./, "");
+      const tHost = targetUrl.replace(/^www\./, "").replace(/^https?:\/\//, "");
+      return rHost === tHost;
+    } catch { return false; }
+  }
+  // URL指定あり → 前方一致で判定
+  return normalizeUrl(resultUrl).startsWith(normalizeUrl(targetUrl));
+}
+
 async function fetchRanksForKw(kw, domains, apiKey, cx, num, gl) {
   const pages = Math.ceil(Math.min(num, 50) / 10); let all = [];
   for (let p = 0; p < pages; p++) {
@@ -143,7 +164,7 @@ async function fetchRanksForKw(kw, domains, apiKey, cx, num, gl) {
   }
   const result = {};
   domains.forEach(d => {
-    const found = all.find(it => { try { return new URL(it.link).hostname.replace(/^www\./,"") === d.replace(/^www\./,""); } catch { return false; } });
+    const found = all.find(it => { try { return urlMatches(it.link, d); } catch { return false; } });
     result[d] = found ? {rank:found.rank, title:found.title, url:found.link} : null;
   });
   return result;
@@ -211,7 +232,7 @@ function SettingsModal({client, onSave, onClose}) {
   const [s, setS] = useState({...client});
   function save() {
     const kws = s.keywords.map(k=>k.trim()).filter(Boolean);
-    const doms = s.domains.map(d=>d.trim().replace(/^https?:\/\//i,"").replace(/\/.*$/,"").toLowerCase()).filter(Boolean);
+    const doms = s.domains.map(d=>d.trim().replace(/^https?:\/\//i,"").toLowerCase()).filter(Boolean);
     onSave({...s, keywords:kws, domains:doms});
   }
   const field = (label, key, type="text") => e("div", {className:"field", key},
@@ -245,8 +266,9 @@ function SettingsModal({client, onSave, onClose}) {
         e("textarea", {rows:4, value:(s.keywords||[]).join("\n"), onChange:ev=>setS({...s,keywords:ev.target.value.split("\n")}), style:{fontFamily:"monospace",fontSize:12}})
       ),
       e("div", {className:"field"},
-        e("label", null, "監視ドメイン（1行1件・http不要・30サイト以上OK）"),
-        e("textarea", {rows:10, value:(s.domains||[]).join("\n"), onChange:ev=>setS({...s,domains:ev.target.value.split("\n")}), style:{fontFamily:"monospace",fontSize:12}})
+        e("label", null, "監視URL（1行1件・30サイト以上OK）"),
+        e("textarea", {rows:10, value:(s.domains||[]).join("\n"), onChange:ev=>setS({...s,domains:ev.target.value.split("\n")}), style:{fontFamily:"monospace",fontSize:12}, placeholder:"ドメインのみ: bakusai.com\n特定URL: bakusai.com/thr_res/acode=3/ctgid=104"}),
+        e("p", {style:{fontSize:11,color:"var(--text3)",marginTop:4}}, "ドメインのみ→そのドメイン全体 / フルURL→そのページを特定して計測")
       ),
       e("div", {style:{display:"flex",gap:8,marginTop:8}},
         e("button", {onClick:save, className:"btn primary"}, "保存"),
