@@ -127,7 +127,7 @@ function dbSave(d) {
   try { localStorage.setItem(SK, JSON.stringify(d)); } catch(e) { console.error(e); }
 }
 
-// ── Google Custom Search ──
+// ── SerpAPI ──
 function normalizeUrl(url) {
   try {
     const u = new URL(url.startsWith("http") ? url : "https://" + url);
@@ -136,7 +136,6 @@ function normalizeUrl(url) {
 }
 
 function urlMatches(resultUrl, targetUrl) {
-  // ドメインのみ指定（スラッシュなし）→ ドメイン一致で判定
   const isDomainOnly = !targetUrl.includes("/");
   if (isDomainOnly) {
     try {
@@ -145,21 +144,33 @@ function urlMatches(resultUrl, targetUrl) {
       return rHost === tHost;
     } catch { return false; }
   }
-  // URL指定あり → 前方一致で判定
   return normalizeUrl(resultUrl).startsWith(normalizeUrl(targetUrl));
 }
 
 async function fetchRanksForKw(kw, domains, apiKey, cx, num, gl) {
-  const pages = Math.ceil(Math.min(num, 50) / 10); let all = [];
+  const pages = Math.ceil(Math.min(num, 50) / 10);
+  let all = [];
   for (let p = 0; p < pages; p++) {
-    const start = p * 10 + 1;
-    const params = new URLSearchParams({key:apiKey, cx, q:kw, num:10, start, hl:"ja"});
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      engine: "google",
+      q: kw,
+      num: 10,
+      start: p * 10,
+      hl: "ja",
+      output: "json"
+    });
     if (gl) params.append("gl", gl);
-    const res = await fetch("https://www.googleapis.com/customsearch/v1?" + params);
+    const res = await fetch("https://serpapi.com/search?" + params);
     const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    if (data.items) all = [...all, ...data.items.map((it,i) => ({...it, rank:start+i}))];
-    if (!data.items || data.items.length < 10) break;
+    if (data.error) throw new Error(data.error);
+    const items = data.organic_results || [];
+    all = [...all, ...items.map((it, i) => ({
+      link: it.link,
+      title: it.title,
+      rank: p * 10 + i + 1
+    }))];
+    if (items.length < 10) break;
     await new Promise(r => setTimeout(r, 350));
   }
   const result = {};
@@ -244,8 +255,7 @@ function SettingsModal({client, onSave, onClose}) {
       e("p", {className:"modal-title"}, "クライアント設定"),
       e("div", {className:"notice"}, "⚠ APIキーはこのブラウザのlocalStorageに保存されます。共用PCでの使用は避けてください。"),
       field("クライアント名", "name"),
-      field("Google API key", "apiKey", "password"),
-      field("検索エンジンID (cx)", "cx"),
+      field("SerpAPI key", "apiKey", "password"),
       e("div", {className:"grid2"},
         e("div", {className:"field"},
           e("label", null, "取得順位数"),
