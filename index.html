@@ -153,15 +153,13 @@ async function fetchRanksForKw(kw, domains, apiKey, cx, num, gl) {
   for (let p = 0; p < pages; p++) {
     const params = new URLSearchParams({
       api_key: apiKey,
-      engine: "google",
       q: kw,
       num: 10,
       start: p * 10,
-      hl: "ja",
-      output: "json"
+      hl: "ja"
     });
     if (gl) params.append("gl", gl);
-    const res = await fetch("https://serpapi.com/search?" + params);
+    const res = await fetch("/api/search?" + params);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     const items = data.organic_results || [];
